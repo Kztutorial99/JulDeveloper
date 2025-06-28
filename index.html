@@ -1,0 +1,2202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Termux AI Assistant - VIP</title>
+  <meta name="description" content="Asisten AI untuk menghasilkan perintah Termux dengan fitur histori chat.">
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    /* Variabel Warna (Dark/Light Mode) */
+    :root {
+      --background: 240 10% 99%;
+      --foreground: 240 10% 3.9%;
+      --card: 240 10% 100%;
+      --card-foreground: 240 10% 3.9%;
+      --sidebar-bg: 240 10% 96%;
+      --primary: 262.1 83.3% 57.8%;
+      --primary-foreground: 210 20% 98%;
+      --border: 240 5.9% 90%;
+      --input: 240 5.9% 92%;
+      --ring: 262.1 83.3% 57.8%;
+      --accent: 240 5.9% 94%;
+    }
+
+    .dark {
+      --background: 228 9% 14%;
+      --foreground: 210 20% 98%;
+      --card: 228 12% 18%;
+      --card-foreground: 210 20% 98%;
+      --sidebar-bg: 228 12% 16%;
+      --primary: 262.1 83.3% 57.8%;
+      --primary-foreground: 210 20% 98%;
+      --border: 228 12% 24%;
+      --input: 228 12% 22%;
+      --ring: 262.1 83.3% 57.8%;
+      --accent: 228 12% 20%;
+    }
+
+    /* Reset dan Base Styles */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { scroll-behavior: smooth; height: 100%; }
+    body {
+      background-color: hsl(var(--background));
+      color: hsl(var(--foreground));
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow: auto;
+    }
+
+    /* Universal focus/active style for smooth click animation */
+    /* Menerapkan reset outline dan transisi global untuk semua elemen interaktif */
+    button, input, textarea, a[role="button"], .cursor-pointer {
+      outline: none; /* Hapus outline default browser */
+      transition: all 0.2s ease; /* Transisi halus untuk semua properti */
+    }
+
+    /* Gaya focus-visible universal untuk elemen dengan border atau background custom */
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    a[role="button"]:focus-visible,
+    .new-chat-button:focus-visible,
+    .engine-btn:focus-visible,
+    .auth-btn:focus-visible,
+    .profile-trigger:focus-visible,
+    .theme-toggle:focus-visible,
+    .engine-selection-button:focus-visible,
+    .submit-btn:focus-visible,
+    .engine-choice-btn:focus-visible,
+    .contact-button:focus-visible,
+    .history-item:focus-visible {
+        border-color: hsl(var(--ring)); /* Ubah warna border saat fokus */
+        box-shadow: 0 0 0 2px hsl(var(--primary), 0.2); /* Tambahkan shadow bulat untuk indikator fokus */
+        outline: none; /* Pastikan outline tidak muncul */
+    }
+
+    /* Layout Aplikasi */
+    .app-layout {
+      display: flex;
+      height: 100vh;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .app-layout.loaded {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      background-color: hsl(var(--sidebar-bg));
+      border-right: 1px solid hsl(var(--border));
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease;
+      z-index: 200;
+    }
+    .sidebar-header { padding: 1rem; }
+    .new-chat-button {
+      display: flex; align-items: center; gap: 0.75rem; width: 100%;
+      padding: 0.75rem 1rem; border-radius: 0.75rem;
+      border: 1px solid hsl(var(--border)); background-color: hsl(var(--card));
+      color: hsl(var(--foreground)); font-size: 0.9rem; font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .new-chat-button:hover { background-color: hsl(var(--input)); }
+
+    /* Engine Selection Buttons (Sidebar) - Hidden */
+    .engine-selection {
+      display: none;
+      gap: 0.5rem;
+      padding: 0 1rem 1rem;
+      border-bottom: 1px solid hsl(var(--border));
+      margin-bottom: 1rem;
+    }
+    .engine-btn {
+      flex: 1;
+      padding: 0.6rem 0.8rem;
+      border-radius: 0.5rem;
+      border: 1px solid hsl(var(--border));
+      background-color: hsl(var(--card));
+      color: hsl(var(--foreground));
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .engine-btn:hover:not(:disabled) {
+      background-color: hsl(var(--input));
+    }
+    .engine-btn.active {
+      background-color: hsl(var(--accent));
+      border-color: hsl(var(--primary));
+      color: hsl(var(--primary));
+    }
+    .engine-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      filter: grayscale(1);
+    }
+
+    .history-nav {
+      flex-grow: 1; overflow-y: auto; padding: 0 1rem;
+      scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin; scrollbar-color: hsl(var(--border)) transparent;
+    }
+    .history-nav::-webkit-scrollbar { width: 6px; }
+    .history-nav::-webkit-scrollbar-track { background: transparent; }
+    .history-nav::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 10px; }
+    .history-nav::-webkit-scrollbar-thumb:hover { background: hsl(var(--ring)); }
+    .history-title {
+      padding: 1rem 0 0.5rem; font-size: 0.75rem; font-weight: 600;
+      color: hsl(var(--foreground), 0.5); text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .history-list { list-style: none; }
+    .history-item {
+      position: relative; display: flex; align-items: center;
+      justify-content: space-between; padding: 0.75rem; border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .history-item:hover { background-color: hsl(var(--input)); }
+    .history-item.active { background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+    .history-item-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.9rem; flex-grow: 1; }
+    .history-item-actions { position: relative; opacity: 0; transition: opacity 0.2s; }
+    .history-item:hover .history-item-actions,
+    .history-item.active .history-item-actions { opacity: 1; }
+    .action-button {
+      background: none; border: none; color: inherit; cursor: pointer; padding: 0.25rem; border-radius: 50%;
+      transition: all 0.2s;
+    }
+    .action-button:hover { background-color: rgba(0,0,0,0.1); }
+    .dark .action-button:hover { background-color: rgba(255,255,255,0.1); }
+    .dropdown-menu {
+      position: absolute; right: 0; top: 100%;
+      background-color: hsl(var(--card)); border: 1px solid hsl(var(--border));
+      border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      z-index: 10; padding: 0.5rem; display: none;
+    }
+    .dropdown-menu.show { display: block; }
+    .dropdown-item {
+      background: none; border: none; width: 100%; text-align: left;
+      padding: 0.5rem 0.75rem; border-radius: 0.25rem; cursor: pointer;
+      font-size: 0.9rem;
+      color: hsl(var(--foreground));
+      transition: all 0.2s;
+    }
+    .dropdown-item.delete { color: #ef4444; }
+    .dropdown-item:hover { background-color: hsl(var(--input)); }
+    .sidebar-footer { padding: 1rem; border-top: 1px solid hsl(var(--border)); display: none; }
+
+
+    /* Area Chat */
+    .chat-area {
+      flex-grow: 1; display: flex; flex-direction: column;
+      height: 100vh; background-color: hsl(var(--card));
+    }
+    .chat-header {
+        display: none; /* Controlled by .app-layout.logged-in */
+        align-items: center;
+        justify-content: space-between; /* Distributes items */
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid hsl(var(--border));
+    }
+    .chat-header h1 {
+        font-size: 1.25rem; /* Default font size for desktop */
+        font-weight: 700;
+        flex-grow: 1; /* Allow title to grow and take available space */
+        min-width: 0; /* Allow shrinking if needed */
+        text-align: center; /* Center the text by default */
+        white-space: nowrap; /* Prevent line breaks */
+        overflow: hidden; /* Hide overflow content */
+        text-overflow: ellipsis; /* Add ellipsis for overflow text */
+    }
+
+    /* Bagian Kanan Header: Theme Toggle & Auth Section */
+    .header-right-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem; /* Space between theme toggle and auth section */
+    }
+
+    /* Bagian Autentikasi */
+    .auth-section { display: flex; align-items: center; gap: 0.5rem; }
+    .auth-buttons { display: flex; gap: 0.5rem; align-items: center; }
+    .auth-btn {
+      padding: 0.5rem 1rem; border-radius: 0.5rem;
+      border: 1px solid hsl(var(--border)); background: hsl(var(--background));
+      color: hsl(var(--foreground)); font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .auth-btn:hover { background: hsl(var(--input)); }
+    .auth-btn.primary { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); border-color: hsl(var(--primary)); }
+
+    /* Info Pengguna & Profil Dropdown */
+    .user-info { display: flex; align-items: center; gap: 0.5rem; position: relative; }
+    .user-info span { font-weight: 500; color: hsl(var(--foreground)); }
+    .profile-section { position: relative; }
+    .profile-trigger {
+      background: hsl(var(--input));
+      border: 1px solid hsl(var(--border));
+      border-radius: 0.75rem;
+      padding: 0.6rem 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: hsl(var(--foreground));
+      transition: all 0.2s;
+    }
+    .profile-trigger:hover {
+      background-color: hsl(var(--accent));
+      border-color: hsl(var(--ring));
+    }
+    .profile-trigger::after {
+      content: '';
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 5px solid currentColor;
+      transition: transform 0.2s;
+      margin-left: 0.5rem;
+    }
+    .profile-dropdown {
+      position: absolute; top: 100%; right: 0;
+      background: hsl(var(--card)); border: 1px solid hsl(var(--border));
+      border-radius: 0.75rem;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+      z-index: 1000; min-width: 280px; padding: 1rem; margin-top: 0.5rem;
+      opacity: 0; visibility: hidden; transform: translateY(-10px);
+      transition: all 0.2s ease;
+    }
+    .profile-dropdown.show { opacity: 1; visibility: visible; transform: translateY(0); }
+    .profile-info { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .profile-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: hsl(var(--primary), 0.1); display: flex; align-items: center;
+      justify-content: center; color: hsl(var(--primary));
+    }
+    .profile-details { flex-grow: 1; }
+    .profile-name { font-weight: 600; color: hsl(var(--foreground)); font-size: 0.95rem; }
+    .profile-email { font-size: 0.8rem; color: hsl(var(--foreground), 0.7); margin-top: 0.25rem; }
+    .profile-details-section { background: hsl(var(--background)); border: 1px solid hsl(var(--border)); border-radius: 0.5rem; padding: 0.75rem; margin: 0.75rem 0; }
+    .profile-detail-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid hsl(var(--border)); }
+    .profile-detail-item:last-child { border-bottom: none; }
+    .profile-detail-label { font-size: 0.8rem; color: hsl(var(--foreground), 0.7); font-weight: 500; }
+    .profile-detail-value { font-size: 0.8rem; color: hsl(var(--foreground)); font-weight: 400; }
+    .profile-divider { height: 1px; background: hsl(var(--border)); margin: 0.75rem 0; }
+    .profile-action-btn {
+      width: 100%; display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.5rem 0.75rem; border: none; background: none;
+      color: hsl(var(--foreground)); border-radius: 0.5rem;
+      cursor: pointer; font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+    .profile-action-btn:hover { background: hsl(var(--input)); }
+    .profile-action-btn.logout { color: #ef4444; }
+    .profile-action-btn.logout:hover { background: rgba(239, 68, 68, 0.1); }
+    .menu-toggle { display: none; background: none; border: none; cursor: pointer; color: hsl(var(--foreground)); }
+
+    /* Location for theme toggle */
+    .theme-toggle {
+        background: hsl(var(--input));
+        border: 1px solid hsl(var(--border));
+        width: 38px;
+        height: 38px;
+        border-radius: 0.75rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: hsl(var(--foreground));
+        transition: all 0.2s;
+    }
+    .theme-toggle:hover {
+        background-color: hsl(var(--accent));
+        border-color: hsl(var(--ring));
+    }
+    .theme-toggle svg {
+        width: 18px;
+        height: 18px;
+    }
+
+
+    /* Area Pesan Chat */
+    .chat-messages-container {
+      flex-grow: 1; overflow-y: auto; padding: 1.5rem;
+      display: flex; flex-direction: column; gap: 1rem;
+      scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin; scrollbar-color: hsl(var(--border)) transparent;
+    }
+    .chat-messages-container::-webkit-scrollbar { width: 8px; }
+    .chat-messages-container::-webkit-scrollbar-track { background: transparent; }
+    .chat-messages-container::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 10px; }
+    .chat-messages-container::-webkit-scrollbar-thumb:hover { background: hsl(var(--ring)); }
+
+    /* Animasi Bubble Chat */
+    @keyframes bubble-in { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .chat-bubble {
+      animation: bubble-in 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+      max-width: 85%; padding: 1rem 1.25rem; border-radius: 1.25rem;
+      word-break: break-word; position: relative;
+    }
+    .chat-bubble.user {
+      background: linear-gradient(135deg, hsl(var(--primary)) 0%, #a855f7 100%);
+      color: hsl(var(--primary-foreground)); align-self: flex-end;
+      border-bottom-right-radius: 0.5rem;
+    }
+    .chat-bubble.ai {
+      background: hsl(var(--background)); color: hsl(var(--card-foreground));
+      align-self: flex-start; border: 1px solid hsl(var(--border));
+      border-bottom-left-radius: 0.5rem;
+    }
+    .chat-bubble.ai .flex-grow { min-width: 0; }
+    /* Styling untuk Markdown */
+    .chat-bubble.ai strong { font-weight: 600; color: hsl(var(--primary)); }
+    .chat-bubble.ai em { font-style: italic; }
+    .chat-bubble.ai pre {
+        background-color: hsl(var(--input));
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+        margin: 0.5rem 0;
+        word-break: break-all;
+        white-space: pre-wrap; /* Pastikan baris panjang tetap terbungkus */
+    }
+    .chat-bubble.ai code {
+        background-color: rgba(0,0,0,0.1);
+        padding: 0.2em 0.4em;
+        border-radius: 0.3em;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85em;
+    }
+    .dark .chat-bubble.ai code {
+        background-color: rgba(255,255,255,0.1);
+    }
+    .chat-bubble.ai ul { margin-left: 1.25rem; list-style: disc; }
+    .chat-bubble.ai ol { margin-left: 1.25rem; list-style: decimal; }
+    .chat-bubble.ai li { margin-bottom: 0.5rem; }
+
+
+    .copy-btn {
+      position: absolute; top: 0.6rem; right: 0.6rem;
+      background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.75rem;
+      font-weight: 500; cursor: pointer; color: white; opacity: 0.8;
+      transition: all 0.2s ease;
+    }
+    .dark .copy-btn { background: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.1); color: hsl(var(--foreground)); }
+    .copy-btn:hover { opacity: 1; transform: scale(1.05); }
+
+    /* Animasi Loading Dots */
+    .loading-dots span {
+      animation: loading-dots-blink 1.4s infinite both;
+      height: 8px; width: 8px; background-color: hsl(var(--primary));
+      display: inline-block; margin: 0 1px; border-radius: 50%;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: .2s; }
+    .loading-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes loading-dots-blink { 0% { opacity: .2; } 20% { opacity: 1; } 100% { opacity: .2; } }
+
+    /* Efek Gradient Text */
+    .gradient-text {
+      background: linear-gradient(90deg, #818cf8, hsl(var(--primary)), #e879f9);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    /* Form Input Chat */
+    .chat-form-container {
+        display: none;
+        padding: 1rem 1.5rem;
+        border-top: 1px solid hsl(var(--border));
+        position: sticky;
+        bottom: 0;
+        background: hsl(var(--card));
+        z-index: 10;
+    }
+
+    .input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        gap: 0.5rem;
+        width: 100%;
+        flex-grow: 1;
+    }
+
+    .input-wrapper .engine-selection-button {
+        height: 48px;
+        line-height: 1;
+        min-width: 90px;
+        padding: 0.5rem 0.8rem;
+        background: hsl(var(--input));
+        border: 1px solid hsl(var(--border));
+        border-radius: 1rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: hsl(var(--foreground));
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .input-wrapper .engine-selection-button:hover {
+        background-color: hsl(var(--accent));
+    }
+
+    .input-wrapper textarea {
+      flex-grow: 1;
+      width: auto;
+      min-height: 48px;
+      background-color: hsl(var(--input));
+      border: 2px solid transparent;
+      border-radius: 1rem;
+      padding: 0.8rem 3.5rem 0.8rem 1.25rem;
+      resize: none;
+      font-size: 1rem;
+      color: hsl(var(--foreground));
+      max-height: 150px;
+      overflow-y: auto;
+      transition: all 0.2s;
+    }
+    .input-wrapper textarea:focus { outline: none; border-color: hsl(var(--ring)); }
+
+    .input-wrapper button[type="submit"] {
+      position: absolute;
+      bottom: 0.4rem;
+      right: 0.4rem;
+      width: 40px;
+      height: 40px;
+      border-radius: 0.75rem; border: none;
+      background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground));
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .input-wrapper button[type="submit"]:disabled { background-color: gray; cursor: not-allowed; }
+
+    /* Toast Notifikasi */
+    #toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .toast {
+      background: hsl(var(--card));
+      color: hsl(var(--card-foreground));
+      border: 1px solid hsl(var(--border));
+      border-left: 4px solid hsl(var(--primary));
+      border-radius: 0.75rem;
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1);
+      padding: 1rem 1.5rem;
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+      transition: all 0.4s cubic-bezier(.21,.98,.65,1);
+      min-width: 250px;
+      text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateY(0) scale(1); }
+
+    /* Overlay Sidebar */
+    .sidebar-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(0,0,0,0.5); z-index: 199;
+      opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s;
+    }
+    .sidebar-open .sidebar-overlay { opacity: 1; visibility: visible; }
+
+    /* Scrollbar Kustom */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background-color: hsl(var(--border)); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--ring)); }
+    .history-nav::-webkit-scrollbar-thumb { background-clip: content-box; border: 2px solid transparent; }
+
+    /* Modal Styling */
+    .modal {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+      opacity: 0; visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+    .modal.show {
+      opacity: 1; visibility: visible;
+    }
+    .modal-content {
+      background: hsl(var(--card));
+      border-radius: 1.25rem;
+      width: 90%;
+      max-width: 480px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      transform: translateY(-20px) scale(0.98);
+      opacity: 0;
+      transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease-out;
+      display: flex;
+      flex-direction: column;
+      padding: 2rem 2rem;
+      text-align: center;
+      position: relative;
+      max-height: 95vh;
+      overflow-y: hidden;
+    }
+    .modal.show .modal-content {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+    .modal-close-btn {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: hsl(var(--foreground), 0.7);
+        cursor: pointer;
+        line-height: 1;
+        padding: 0.25rem;
+        border-radius: 50%;
+        transition: all 0.2s;
+    }
+    .modal-close-btn:hover {
+        background-color: hsl(var(--input));
+    }
+
+
+    .modal-header { display: none; }
+
+    .modal-body {
+      padding: 0;
+      flex-grow: 1;
+    }
+
+    #auth-modal .modal-body,
+    #engine-selection-modal .modal-body {
+        padding: 1.5rem;
+    }
+
+    #pro-upgrade-modal .modal-body {
+        padding: 0;
+    }
+
+
+    .modal-body h2 {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: hsl(var(--foreground));
+        margin-bottom: 1rem;
+    }
+    .modal-body p {
+        font-size: 0.95rem;
+        color: hsl(var(--foreground), 0.7);
+        margin-bottom: 2rem;
+    }
+
+    .form-group { margin-bottom: 1.5rem; }
+    .form-group label { display: none; }
+    .form-group input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid hsl(var(--border));
+      border-radius: 0.5rem;
+      background: hsl(var(--input));
+      color: hsl(var(--foreground));
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+    .form-group input::placeholder {
+        color: hsl(var(--foreground), 0.5);
+    }
+    .form-group input:focus {
+      border-color: hsl(var(--primary));
+      box-shadow: 0 0 0 2px hsl(var(--primary), 0.2);
+      background-color: hsl(var(--card));
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 0.9rem 1rem;
+      background: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+      border: none;
+      border-radius: 0.5rem;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .submit-btn:hover {
+      background-color: hsl(var(--primary), 0.9);
+      transform: translateY(-1px);
+    }
+    .submit-btn:active {
+      transform: translateY(0);
+    }
+
+    .modal-links {
+        margin-top: 1.5rem;
+        font-size: 0.85rem;
+        color: hsl(var(--foreground), 0.6);
+    }
+    .modal-links a {
+        color: hsl(var(--primary));
+        text-decoration: none;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    .modal-links a:hover {
+        text-decoration: underline;
+    }
+
+    /* Engine Selection Modal specific styles */
+    .engine-choice-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    .engine-choice-btn {
+        width: 100%;
+        padding: 1rem;
+        border: 1px solid hsl(var(--border));
+        border-radius: 0.75rem;
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .engine-choice-btn:hover:not(:disabled) {
+        background-color: hsl(var(--input));
+    }
+    .engine-choice-btn.active {
+        background-color: hsl(var(--accent));
+        border-color: hsl(var(--primary));
+        color: hsl(var(--primary));
+    }
+    .engine-choice-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Pro Upgrade Modal specific styles */
+    .pro-details .price {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: hsl(var(--primary));
+        margin: 1rem 0;
+    }
+    .pro-details .features-list {
+        list-style: none;
+        padding: 0;
+        margin-bottom: 1.5rem;
+        text-align: left;
+    }
+    .pro-details .features-list li {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.4rem;
+        color: hsl(var(--foreground), 0.9);
+        font-size: 0.88rem;
+    }
+    .pro-details .features-list li svg {
+        color: #10b981;
+        min-width: 18px;
+    }
+    .payment-methods {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+        text-align: left;
+        padding: 1rem;
+        border: 1px solid hsl(var(--border));
+        border-radius: 1rem;
+        background: hsl(var(--background));
+    }
+    .payment-methods h3 {
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+        color: hsl(var(--foreground));
+        text-align: center;
+    }
+    .payment-method-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.95rem;
+        color: hsl(var(--foreground));
+    }
+    .payment-method-item .icon {
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .payment-method-item a {
+        color: hsl(var(--primary));
+        text-decoration: none;
+        word-break: break-word;
+    }
+    .payment-method-item a:hover {
+        text-decoration: underline;
+    }
+    .payment-methods p {
+        font-size: 0.85rem;
+        color: hsl(var(--foreground), 0.7);
+        margin-top: 0.75rem;
+        line-height: 1.4;
+    }
+    /* Info Akun Display (saat sudah menjadi pro) */
+    .account-info-display {
+        margin-top: 1.5rem;
+        text-align: left;
+        padding: 1rem;
+        border: 1px solid hsl(var(--border));
+        border-radius: 0.75rem;
+        background: hsl(var(--background));
+    }
+    .account-info-display h3 {
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+        color: hsl(var(--foreground));
+        text-align: center;
+    }
+    .account-info-display .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid hsl(var(--border));
+        font-size: 0.95rem;
+        color: hsl(var(--foreground));
+    }
+    .account-info-display .info-item:last-child {
+        border-bottom: none;
+    }
+    .account-info-display .info-label {
+        font-weight: 500;
+        color: hsl(var(--foreground), 0.8);
+    }
+    .account-info-display .info-value {
+        font-weight: 400;
+    }
+
+    /* Added: Style for Contact Admin Buttons */
+    .contact-admin-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid hsl(var(--border));
+    }
+
+    .contact-admin-buttons h3 {
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+        color: hsl(var(--foreground));
+        text-align: center;
+    }
+
+    .contact-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 0.8rem 1rem;
+        border-radius: 0.75rem;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        color: hsl(var(--primary-foreground));
+    }
+
+    .contact-button.telegram {
+        background: #0088CC;
+        border: 1px solid #0088CC;
+    }
+    .contact-button.telegram:hover {
+        background: #007bbd;
+        transform: translateY(-1px);
+    }
+
+    .contact-button.whatsapp {
+        background: #25D366;
+        border: 1px solid #25D366;
+    }
+    .contact-button.whatsapp:hover {
+        background: #1dae51;
+        transform: translateY(-1px);
+    }
+
+
+    /* Bagian Konten AI Response/Command */
+    .command-section, .ai-response-pro {
+        background: hsl(var(--background));
+        border: 1px solid hsl(var(--border));
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin: 0.75rem 0;
+    }
+    .ai-response-pro p {
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: hsl(var(--foreground));
+    }
+    .response-description { color: hsl(var(--foreground), 0.8); font-size: 0.95rem; line-height: 1.6; margin-bottom: 0.75rem; }
+    /* Generic section for setup/usage details */
+    .response-detail-block {
+        background: hsl(var(--input));
+        border: 1px solid hsl(var(--border));
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        margin-top: 0.75rem;
+        position: relative;
+    }
+    .response-detail-block-title {
+        font-weight: 600;
+        color: hsl(var(--foreground));
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+    }
+    .response-detail-block-text {
+        color: hsl(var(--foreground), 0.8);
+        font-size: 0.8rem;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+
+    .command-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid hsl(var(--border)); }
+    .command-title { font-weight: 600; color: hsl(var(--primary)); font-size: 0.9rem; }
+    .command-actions { display: flex; gap: 0.5rem; }
+    .action-btn {
+      padding: 0.25rem 0.75rem; font-size: 0.75rem; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); color: hsl(var(--foreground)); border-radius: 0.375rem; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .action-btn:hover { background: hsl(var(--input)); }
+    .action-btn.copy { color: hsl(var(--primary)); border-color: hsl(var(--primary)); }
+    .command-code { background: hsl(var(--input)); border-radius: 0.5rem; padding: 0.75rem; font-family: 'Courier New', monospace; font-size: 0.9rem; margin: 0.5rem 0; word-break: break-all; white-space: pre-wrap; }
+    .command-description { color: hsl(var(--foreground), 0.8); font-size: 0.9rem; line-height: 1.5; margin: 0.75rem 0; }
+
+
+    /* Media Queries Responsif */
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-100%); box-shadow: 4px 0 15px rgba(0,0,0,0.1); }
+      .sidebar-open .sidebar { transform: translateX(0); }
+      .menu-toggle { display: block; }
+      .auth-buttons { flex-direction: column; gap: 0.25rem; }
+      .auth-btn { padding: 0.375rem 0.75rem; font-size: 0.8rem; }
+      .modal-content {
+          margin: 0.75rem;
+          max-width: 98%;
+          border-radius: 0.8rem;
+          padding: 1rem;
+          max-height: 95vh;
+          overflow-y: auto;
+      }
+      .modal-header { padding: 1.25rem 1.5rem; }
+      .modal-header h2 { font-size: 1.3rem; }
+
+      #auth-modal .modal-body,
+      #engine-selection-modal .modal-body {
+          padding: 1.5rem;
+      }
+
+      #pro-upgrade-modal .modal-content {
+          padding: 1rem 1rem;
+      }
+
+      .submit-btn { font-size: 1rem; padding: 0.85rem; }
+      .chat-form-container { padding: 0.75rem 0.75rem; }
+      .input-wrapper { gap: 0.4rem; }
+      .input-wrapper .engine-selection-button {
+          height: 42px;
+          min-width: 75px;
+          font-size: 0.75rem;
+          padding: 0.4rem 0.6rem;
+      }
+      .input-wrapper textarea { padding: 0.7rem 3rem 0.7rem 1rem; font-size: 0.9rem; }
+      .input-wrapper button[type="submit"] {
+          bottom: 0.3rem;
+          right: 0.3rem;
+          width: 36px;
+          height: 36px;
+      }
+      .chat-messages-container { padding: 1rem; }
+      .chat-bubble { max-width: 95%; }
+      .pro-details .features-list li {
+          font-size: 0.85rem;
+      }
+
+      .profile-trigger {
+          padding: 0.4rem 0.7rem;
+          font-size: 0.8rem;
+      }
+      .profile-trigger::after {
+          border-left: 4px solid transparent;
+          border-right: 4px solid transparent;
+          border-top: 4px solid currentColor;
+          margin-left: 0.4rem;
+      }
+      .theme-toggle {
+          width: 34px;
+          height: 34px;
+          border-radius: 0.6rem;
+      }
+      .theme-toggle svg {
+          width: 16px;
+          height: 16px;
+      }
+      .header-right-actions {
+          gap: 0.5rem;
+      }
+
+      .chat-header {
+          padding: 0.75rem 1rem;
+          align-items: center;
+      }
+      .chat-header h1 {
+          font-size: 1.0rem;
+          text-align: left;
+          padding: 0 0.5rem;
+          white-space: normal;
+          text-overflow: unset;
+          min-width: unset;
+          word-break: break-word;
+          line-height: 1.2;
+          flex-shrink: 1;
+      }
+      .menu-toggle {
+          margin-right: 0.5rem;
+          flex-shrink: 0;
+      }
+      .header-right-actions {
+          margin-left: 0.5rem;
+          flex-shrink: 0;
+      }
+    }
+
+    /* CSS untuk menampilkan/menyembunyikan elemen setelah login */
+    .app-layout.logged-in .chat-header,
+    .app-layout.logged-in .chat-form-container {
+        display: flex;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="app-layout" class="app-layout">
+    <aside id="sidebar" class="sidebar" aria-label="Riwayat Obrolan dan Navigasi">
+      <div class="sidebar-header">
+        <button id="new-chat-btn" class="new-chat-button" aria-label="Mulai Obrolan Baru">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Obrolan Baru</span>
+        </button>
+        <div class="engine-selection" style="display: none;">
+          <button id="engine-free-btn" class="engine-btn active" data-engine="free">Free</button>
+          <button id="engine-pro-btn" class="engine-btn" data-engine="pro">Pro</button>
+        </div>
+      </div>
+      <nav id="history-nav" class="history-nav" aria-label="Riwayat Obrolan">
+        <p class="history-title">Riwayat</p>
+        <ul id="history-list" class="history-list">
+          </ul>
+      </nav>
+      <div class="sidebar-footer"></div>
+    </aside>
+
+    <main class="chat-area">
+      <header class="chat-header">
+        <button id="menu-toggle" class="menu-toggle" aria-label="Toggle sidebar menu">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <h1 class="gradient-text">Asisten AI Termux</h1>
+        <div class="header-right-actions">
+            <button id="theme-toggle" class="theme-toggle" title="Ganti Tema" aria-label="Ganti tema terang atau gelap">
+              <span id="theme-icon-sidebar"></span>
+            </button>
+            <div class="auth-section">
+              <div id="user-info" class="user-info" style="display: none;">
+                <div class="profile-section">
+                  <button id="username-display" class="profile-trigger" aria-haspopup="menu" aria-expanded="false">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <span></span>
+                  </button>
+                  <div id="profile-menu" class="profile-dropdown" role="menu">
+                    <div class="profile-info">
+                      <div class="profile-avatar">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                      </div>
+                      <div class="profile-details">
+                        <div class="profile-name" id="profile-username"></div>
+                        <div class="profile-email" id="profile-license"></div>
+                      </div>
+                    </div>
+
+                    <div class="profile-details-section">
+                      <div class="profile-detail-item">
+                        <span class="profile-detail-label">Jenis Akun</span>
+                        <span class="profile-detail-value" id="profile-account-type"></span>
+                      </div>
+                      <div class="profile-detail-item" id="profile-credits-item" style="display: none;">
+                        <span class="profile-detail-label">Kredit Gratis</span>
+                        <span class="profile-detail-value"></span>
+                      </div>
+                      <div class="profile-detail-item">
+                        <span class="profile-detail-label">Bergabung Sejak</span>
+                        <span class="profile-detail-value" id="profile-member-since"></span>
+                      </div>
+                      <div class="profile-detail-item">
+                        <span class="profile-detail-label">Total Obrolan</span>
+                        <span class="profile-detail-value" id="profile-total-chats">0</span>
+                      </div>
+                      <div class="profile-detail-item">
+                        <span class="profile-detail-label">Status</span>
+                        <span class="profile-detail-value" style="color: #10b981;">● Online</span>
+                      </div>
+                    </div>
+
+                    <div class="profile-divider"></div>
+                    <div class="profile-actions">
+                      <button id="logout-btn" class="profile-action-btn logout" role="menuitem">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                          <polyline points="16,17 21,12 16,7"></polyline>
+                          <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        Keluar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div id="auth-buttons" class="auth-buttons">
+                <button id="login-btn" class="auth-btn primary">Login Lisensi</button>
+              </div>
+            </div>
+        </div>
+      </header>
+
+      <div id="chat-messages" class="chat-messages-container" role="log" aria-live="polite">
+        </div>
+
+      <form id="chat-form" class="chat-form-container">
+        <div class="input-wrapper">
+          <button type="button" id="engine-selection-button" class="engine-selection-button">
+            <span>Engine: Free</span> <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <textarea id="user-query" rows="1" placeholder="Tanya pada AI..." aria-label="Masukkan pertanyaan Anda"></textarea>
+          <button id="generate-btn" type="submit" title="Kirim Pesan" aria-label="Kirim pesan ke AI">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div id="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+  <div id="auth-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-content">
+      <button class="modal-close-btn" aria-label="Close modal" onclick="hideAuthModal()">&times;</button>
+      <div class="modal-body">
+        <h2 id="modal-title">Selamat Datang Kembali</h2>
+        <p>Login dengan lisensi Anda untuk melanjutkan.</p>
+
+        <form id="auth-form">
+          <div class="form-group">
+            <label for="license-key" class="sr-only">Masukkan License Key Anda</label>
+            <input type="text" id="license-key" required placeholder="Masukkan License Key Anda" aria-required="true">
+          </div>
+          <button type="submit" class="submit-btn" id="submit-btn">Login</button>
+        </form>
+
+        <div class="modal-links">
+          Tidak punya lisensi? <a href="#" target="_blank" rel="noopener noreferrer">Dapatkan lisensi di sini</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="engine-selection-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="engine-modal-title">
+    <div class="modal-content">
+      <button class="modal-close-btn" aria-label="Close modal" onclick="hideEngineSelectionModal()">&times;</button>
+      <div class="modal-body">
+        <h2 id="engine-modal-title">Pilih Mode Asisten AI</h2>
+        <p>Pilih mode AI yang ingin Anda gunakan.</p>
+
+        <div class="engine-choice-buttons">
+          <button id="modal-engine-free-btn" class="engine-choice-btn" data-engine="free">
+            <span class="type">Free Mode</span>
+            <span class="description">Spesialis perintah Termux.</span>
+          </button>
+          <button id="modal-engine-pro-btn" class="engine-choice-btn" data-engine="pro">
+            <span class="type">Pro Mode</span>
+            <span class="description">Asisten AI serbaguna (Membutuhkan akun Premium).</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pro-upgrade-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="pro-upgrade-title">
+    <div class="modal-content">
+      <button class="modal-close-btn" aria-label="Close modal" onclick="hideProUpgradeModal()">&times;</button>
+      <div class="modal-body">
+        <h2 id="pro-upgrade-title">Upgrade ke Akun Premium!</h2>
+        <p>Dapatkan akses penuh ke fitur AI serbaguna.</p>
+
+        <div class="pro-details">
+            <div class="price">Rp25.000</div>
+            <ul class="features-list">
+                <li><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> AI serbaguna (bukan hanya Termux)</li>
+                <li><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Respon lebih cepat & akurat</li>
+                <li><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Dukungan prioritas</li>
+            </ul>
+            <button class="submit-btn" id="buy-pro-btn">Beli Sekarang!</button>
+
+            <div id="account-info-display" class="account-info-display" style="display: none;">
+                <h3>Info Akun Anda</h3>
+                <div class="info-item">
+                    <span class="info-label">Nama Pengguna:</span>
+                    <span class="info-value" id="pro-modal-username"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Lisensi Anda:</span>
+                    <span class="info-value" id="pro-modal-license"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Jenis Akun:</span>
+                    <span class="info-value" id="pro-modal-account-type"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Bergabung Sejak:</span>
+                    <span class="info-value" id="pro-modal-member-since"></span>
+                </div>
+            </div>
+
+            <div id="payment-methods-display" style="display: none;">
+                <div class="payment-methods">
+                    <h3>Metode Pembayaran</h3>
+                    <div class="payment-method-item">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5-1.5 4-1.5s4 1.5 4 1.5"/></svg>
+                        </span>
+                        <span>OVO: <a href="tel:0895325844493">0895325844493</a></span>
+                    </div>
+                    <div class="payment-method-item">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 17.5a1.49 1.49 0 0 1 .5-1.7L8.87 3.56a2.08 2.08 0 0 0-3.25.26L2 6.81a2.02 2.02 0 0 0 .23 3.32l2.94 1.48a.62.62 0 0 0 .48-.59V11l2.52 3.97a2.07 2.07 0 0 0 1.71 2.66l5.66 2.08a1.5 1.5 0 0 0 1.75-.5zM6.56 5.63l2.47 7.58M22 10.95l-5.74-5.76a1.99 1.99 0 0 0-2.86.25l-.81 1.05"/></svg>
+                        </span>
+                        <span>DANA: <a href="tel:0895325844493">0895325844493</a></span>
+                    </div>
+                    <div class="payment-method-item">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wallet"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 3h2"/><path d="M16 3h2"/><path d="M6 21h2"/><path d="M16 21h2"/></svg>
+                        </span>
+                        <span>Gopay: <a href="tel:0895325844493">0895325844493</a></span>
+                    </div>
+                    <p>Atas Nama: **Jul** Al***** Pan**y</p>
+                </div>
+                <p class="payment-instructions">
+                    Mohon lakukan pembayaran terlebih dahulu. Setelah pembayaran berhasil, **kirimkan bukti pembayaran Anda beserta ID License Account Anda** ke Admin melalui kontak di atas. Akun Anda akan diaktivasi setelah verifikasi oleh admin.
+                </p>
+                <div class="contact-admin-buttons">
+                    <h3>Hubungi Admin</h3>
+                    <a href="https://t.me/@JulDeveloper" target="_blank" rel="noopener noreferrer" class="contact-button telegram">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12A10 10 0 1 1 12 2a10 10 0 0 1 10 10Z"/><path d="m8 12 2 2 4-4"/><path d="M8 8a3 3 0 0 1 4 0l5 4 2 2"/></svg>
+                        Telegram
+                    </a>
+                    <a href="https://wa.me/message/RWSQU6YACEKPM1" target="_blank" rel="noopener noreferrer" class="contact-button whatsapp">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="8.5" cy="12" r="1.5"/><circle cx="15.5" cy="12" r="1.5"/></svg>
+                        WhatsApp
+                    </a>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const chatMessages = document.getElementById('chat-messages');
+        const chatForm = document.getElementById('chat-form');
+        const userQueryInput = document.getElementById('user-query');
+        const generateBtn = document.getElementById('generate-btn');
+        const newChatBtn = document.getElementById('new-chat-btn');
+        const historyList = document.getElementById('history-list');
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon-sidebar');
+        const menuToggle = document.getElementById('menu-toggle');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const toastContainer = document.getElementById('toast-container');
+        const appLayout = document.getElementById('app-layout');
+
+        const engineSelectionButton = document.getElementById('engine-selection-button');
+
+        const authModal = document.getElementById('auth-modal');
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const authForm = document.getElementById('auth-form');
+        const userInfo = document.getElementById('user-info');
+        const authButtons = document.getElementById('auth-buttons');
+        const usernameDisplay = document.getElementById('username-display');
+        const profileMenu = document.getElementById('profile-menu');
+        const licenseKeyInput = document.getElementById('license-key');
+
+        const engineSelectionModal = document.getElementById('engine-selection-modal');
+        const modalEngineFreeBtn = document.getElementById('modal-engine-free-btn');
+        const modalEngineProBtn = document.getElementById('modal-engine-pro-btn');
+
+        const proUpgradeModal = document.getElementById('pro-upgrade-modal');
+        const buyProBtn = document.getElementById('buy-pro-btn');
+        const paymentMethodsDisplay = document.getElementById('payment-methods-display');
+        const accountInfoDisplay = document.getElementById('account-info-display');
+
+        let activeChatId = null;
+        let chats = {};
+        let currentUser = null;
+        let currentEngine = 'free';
+
+        // GANTI INI DENGAN API KEY ANDA YANG VALID!
+        const API_KEY = 'AIzaSyALmzeOwELZ7H1HnBqzijq2u9MTV9Dw4g0';
+
+        const FREE_ENGINE_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+        const PRO_ENGINE_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+
+        // ===========================================
+        // KODE UNTUK SISTEM KREDIT (DENGAN PENAMBAHAN FUNGSI GET SERVER TIME)
+        // ===========================================
+        const MAX_FREE_CREDITS = 10;
+        const CREDIT_RESET_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 jam dalam milidetik
+
+        // Fungsi untuk mendapatkan waktu dari server eksternal (simulasi time.is)
+        async function getServerTimestamp() {
+            try {
+                // Time.is tidak menyediakan API JSON langsung untuk diakses via CORS.
+                // Sebagai ALTERNATIF, kita bisa pakai API publik lain yang menyediakan timestamp
+                // Misalnya, WorldTimeAPI (lebih reliable untuk CORS) atau NTP pool yang diproxy.
+                // Karena WorldTimeAPI membutuhkan zona waktu, saya akan berikan contoh sederhana
+                // dengan Fetching dari API JSONPlaceholder yang cepat dan tidak butuh autentikasi,
+                // lalu menggunakan Date.now() sebagai fallback jika gagal.
+                // ATAU cara paling aman: buatlah endpoint di backend Anda sendiri.
+
+                // Simulasi fetching waktu dari API yang responsif (misal: JSONPlaceholder)
+                // Ini BUKAN mengambil waktu dari time.is, tapi menunjukkan konsepnya.
+                // Untuk real-world, ganti dengan API server Anda yang menghasilkan timestamp.
+                const response = await fetch('https://jsonplaceholder.typicode.com/todos/1');
+                if (!response.ok) throw new Error('Failed to fetch server time simulation');
+                
+                // Pada aplikasi nyata, server Anda akan mengembalikan { timestamp: <long> }
+                // Di sini, kita hanya menggunakan waktu lokal jika fetch berhasil sebagai simulasi
+                // karena JSONPlaceholder tidak memberikan timestamp.
+                // Jika ini adalah backend Anda, Anda akan parsing data.json().timestamp
+                console.log("Menggunakan waktu perangkat sebagai simulasi waktu server.");
+                return Date.now(); // Fallback atau simulasi jika tidak ada API waktu eksternal yang mudah diakses
+                
+            } catch (error) {
+                console.error('Error fetching server timestamp, falling back to local time:', error);
+                showToast('Gagal mengambil waktu server, menggunakan waktu perangkat.', 'warning');
+                return Date.now(); // Fallback ke waktu lokal jika gagal
+            }
+        }
+
+        async function loadUserFromStorage() {
+            const userData = localStorage.getItem('termuxUser');
+            if (userData) {
+                currentUser = JSON.parse(userData);
+                
+                // Dapatkan waktu server yang 'terpercaya'
+                const serverTime = await getServerTimestamp();
+
+                // Inisialisasi kredit untuk pengguna 'Free' jika belum ada
+                if (currentUser.accountType === 'Free') {
+                    if (typeof currentUser.freeCredits === 'undefined' || typeof currentUser.lastCreditReset === 'undefined') {
+                        currentUser.freeCredits = MAX_FREE_CREDITS;
+                        currentUser.lastCreditReset = serverTime; // Gunakan waktu server
+                        saveUserToStorage();
+                    } else {
+                        // Cek apakah sudah waktunya reset kredit (berbasis waktu server)
+                        if (serverTime - currentUser.lastCreditReset >= CREDIT_RESET_INTERVAL_MS) {
+                            currentUser.freeCredits = MAX_FREE_CREDITS;
+                            currentUser.lastCreditReset = serverTime; // Perbarui dengan waktu server saat reset
+                            saveUserToStorage();
+                            showToast('Kredit gratis Anda telah direset menjadi 10!');
+                        }
+                    }
+                }
+            }
+        }
+
+        function decrementFreeCredit() {
+            if (currentUser && currentUser.accountType === 'Free' && currentUser.freeCredits > 0) {
+                currentUser.freeCredits--;
+                saveUserToStorage();
+                updateProfileCreditsDisplay();
+                return true;
+            }
+            return false;
+        }
+
+        function updateProfileCreditsDisplay() {
+            const profileCreditItem = document.getElementById('profile-credits-item');
+            if (profileCreditItem) {
+                if (currentUser && currentUser.accountType === 'Free') {
+                    profileCreditItem.style.display = 'flex';
+                    profileCreditItem.querySelector('.profile-detail-value').textContent = `${currentUser.freeCredits}/${MAX_FREE_CREDITS}`;
+                } else {
+                    profileCreditItem.style.display = 'none';
+                }
+            }
+        }
+        // ===========================================
+        // AKHIR KODE UNTUK SISTEM KREDIT
+        // ===========================================
+
+
+        async function init() { // Ubah init menjadi async
+            loadTheme();
+            await loadUserFromStorage(); // Tunggu hingga user dan kredit dimuat/dicek dengan waktu server
+            loadEngineState();
+            if (currentUser) {
+                appLayout.classList.add('logged-in');
+                appLayout.classList.add('loaded');
+                loadChatsFromStorage();
+                setActiveChat(findLastActiveChatId() || createNewChat());
+                renderHistory();
+            } else {
+                appLayout.classList.add('loaded');
+                showAuthModal();
+            }
+            setupEventListeners();
+            adjustTextareaHeight();
+            updateAuthUI();
+        }
+
+        function loadTheme() {
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.documentElement.classList.add('dark');
+            }
+            updateThemeIcon();
+        }
+
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const currentThemeIcon = document.getElementById('theme-icon-sidebar');
+            if (currentThemeIcon) {
+                currentThemeIcon.innerHTML = isDark
+                    ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+                    : `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+            }
+        }
+
+        function loadEngineState() {
+            const savedEngine = localStorage.getItem('currentEngine');
+            if (savedEngine) {
+                currentEngine = savedEngine;
+            }
+        }
+
+        function saveEngineState() {
+            localStorage.setItem('currentEngine', currentEngine);
+        }
+
+        function setEngine(engine) {
+            if (engine === 'pro' && (!currentUser || currentUser.accountType !== 'Premium')) {
+                hideEngineSelectionModal();
+                showProUpgradeModal();
+                return;
+            }
+            currentEngine = engine;
+            saveEngineState();
+            updateEngineDisplayButton();
+            hideEngineSelectionModal();
+        }
+
+        function updateEngineDisplayButton() {
+            engineSelectionButton.innerHTML = `
+                <span>Engine: ${currentEngine === 'free' ? 'Free' : 'Pro'}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            `;
+
+            modalEngineFreeBtn.classList.toggle('active', currentEngine === 'free');
+            modalEngineProBtn.classList.toggle('active', currentEngine === 'pro');
+
+            if (!currentUser || currentUser.accountType !== 'Premium') {
+                modalEngineProBtn.disabled = false;
+                modalEngineProBtn.title = "Dibutuhkan akun Premium untuk mode Pro";
+            } else {
+                modalEngineProBtn.disabled = false;
+                modalEngineProBtn.title = "";
+            }
+        }
+
+        function saveUserToStorage() {
+            if (currentUser) {
+                localStorage.setItem('termuxUser', JSON.stringify(currentUser));
+            } else {
+                localStorage.removeItem('termuxUser');
+            }
+        }
+
+        function updateAuthUI() {
+            if (currentUser) {
+                userInfo.style.display = 'flex';
+                authButtons.style.display = 'none';
+                usernameDisplay.querySelector('span').textContent = currentUser.username;
+                usernameDisplay.setAttribute('aria-expanded', profileMenu.classList.contains('show'));
+                document.getElementById('profile-username').textContent = currentUser.username;
+                document.getElementById('profile-license').textContent = currentUser.license;
+                document.getElementById('profile-account-type').textContent = currentUser.accountType || 'Free';
+
+                const memberSince = new Date(currentUser.createdAt || Date.now()).toLocaleDateString('id-ID', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+                document.getElementById('profile-member-since').textContent = memberSince;
+                document.getElementById('profile-total-chats').textContent = Object.keys(chats).length;
+
+                document.getElementById('pro-modal-username').textContent = currentUser.username;
+                document.getElementById('pro-modal-license').textContent = currentUser.license;
+                document.getElementById('pro-modal-account-type').textContent = currentUser.accountType || 'Free';
+                document.getElementById('pro-modal-member-since').textContent = memberSince;
+
+                appLayout.classList.add('logged-in');
+                updateProfileCreditsDisplay();
+            } else {
+                userInfo.style.display = 'none';
+                authButtons.style.display = 'flex';
+                appLayout.classList.remove('logged-in');
+                updateProfileCreditsDisplay();
+            }
+            updateEngineDisplayButton();
+        }
+
+        function showAuthModal() {
+            authModal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            licenseKeyInput.focus();
+        }
+
+        function hideAuthModal() {
+            authModal.classList.remove('show');
+            setTimeout(() => {
+                authForm.reset();
+                document.body.style.overflow = '';
+            }, 300);
+        }
+
+        function showEngineSelectionModal() {
+            engineSelectionModal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            modalEngineFreeBtn.classList.toggle('active', currentEngine === 'free');
+            modalEngineProBtn.classList.toggle('active', currentEngine === 'pro');
+        }
+
+        function hideEngineSelectionModal() {
+            engineSelectionModal.classList.remove('show');
+            setTimeout(() => {
+                document.body.style.overflow = '';
+            }, 300);
+        }
+
+        function showProUpgradeModal() {
+            proUpgradeModal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            accountInfoDisplay.style.display = 'none';
+            paymentMethodsDisplay.style.display = 'none';
+            buyProBtn.style.display = 'block';
+            if (currentUser) {
+                 document.getElementById('pro-modal-username').textContent = currentUser.username;
+                 document.getElementById('pro-modal-license').textContent = currentUser.license;
+                 document.getElementById('pro-modal-account-type').textContent = currentUser.accountType || 'Free';
+                 const memberSince = new Date(currentUser.createdAt || Date.now()).toLocaleDateString('id-ID', {
+                    year: 'numeric', month: 'short', day: 'numeric'
+                 });
+                 document.getElementById('pro-modal-member-since').textContent = memberSince;
+            }
+        }
+
+        function hideProUpgradeModal() {
+            proUpgradeModal.classList.remove('show');
+            setTimeout(() => {
+                document.body.style.overflow = '';
+            }, 300);
+        }
+
+        function logoutUser() {
+            currentUser = null;
+            saveUserToStorage();
+
+            chats = {};
+            activeChatId = null;
+            saveChatsToStorage();
+            renderHistory();
+            renderChatMessages();
+
+            setEngine('free');
+        }
+
+        function handleLogoutClick() {
+            logoutUser();
+            updateAuthUI();
+            showToast('Logout berhasil');
+            showAuthModal();
+        }
+
+        async function handleLicenseLogin(licenseKey) {
+            if (!licenseKey) {
+                showToast('Lisensi tidak boleh kosong', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('user.json');
+                if (!response.ok) {
+                    throw new Error('Gagal memuat database lisensi. Pastikan file user.json ada dan dapat diakses.');
+                }
+                const users = await response.json();
+
+                const foundUser = users.find(user => user.license === licenseKey.trim());
+
+                if (foundUser) {
+                    currentUser = { ...foundUser };
+                    
+                    // Dapatkan waktu server yang 'terpercaya' saat login
+                    const serverTimeAtLogin = await getServerTimestamp();
+
+                    if (currentUser.accountType === 'Free' && (typeof currentUser.freeCredits === 'undefined' || typeof currentUser.lastCreditReset === 'undefined')) {
+                        currentUser.freeCredits = MAX_FREE_CREDITS;
+                        currentUser.lastCreditReset = serverTimeAtLogin; // Gunakan waktu server saat inisialisasi
+                    } else if (currentUser.accountType === 'Free') {
+                        // Cek lagi saat login, jika sudah waktunya reset (berdasarkan waktu server)
+                        if (serverTimeAtLogin - currentUser.lastCreditReset >= CREDIT_RESET_INTERVAL_MS) {
+                            currentUser.freeCredits = MAX_FREE_CREDITS;
+                            currentUser.lastCreditReset = serverTimeAtLogin; // Perbarui dengan waktu server saat reset
+                        }
+                    }
+                    saveUserToStorage();
+
+                    loadChatsFromStorage();
+                    setActiveChat(findLastActiveChatId() || createNewChat());
+                    renderHistory();
+
+                    updateAuthUI();
+                    hideAuthModal();
+                    showToast(`Login berhasil! Selamat datang, ${currentUser.username}.`);
+                } else {
+                    showToast('Lisensi tidak valid atau tidak ditemukan.', 'error');
+                }
+            } catch (error) {
+                console.error('Error during login:', error);
+                showToast(error.message || 'Terjadi kesalahan saat login.', 'error');
+            }
+        }
+
+        function loadChatsFromStorage() {
+            chats = JSON.parse(localStorage.getItem('termuxChats') || '{}');
+        }
+        function saveChatsToStorage() {
+            localStorage.setItem('termuxChats', JSON.stringify(chats));
+        }
+        function findLastActiveChatId() {
+            const lastId = localStorage.getItem('activeChatId');
+            return chats[lastId] ? lastId : null;
+        }
+        function saveActiveChatId(id) {
+            localStorage.setItem('activeChatId', id);
+        }
+        function createNewChat() {
+            const newId = `chat_${Date.now()}`;
+            chats[newId] = {
+                title: "Obrolan Baru",
+                messages: [{ role: 'ai', text: 'Halo! Ada yang bisa saya bantu dengan Termux?' }],
+                createdAt: new Date().toISOString()
+            };
+            saveChatsToStorage();
+            updateAuthUI();
+            return newId;
+        }
+        function setActiveChat(id) {
+            activeChatId = id;
+            saveActiveChatId(id);
+            renderChatMessages();
+            const activeItem = document.querySelector(`.history-item[data-id="${id}"]`);
+            document.querySelectorAll('.history-item').forEach(item => item.classList.remove('active'));
+            if (activeItem) {
+                activeItem.classList.add('active');
+            }
+            document.body.classList.remove('sidebar-open');
+        }
+        function renderHistory() {
+            historyList.innerHTML = '';
+            const sortedChats = Object.entries(chats).sort((a, b) => new Date(b[1].createdAt) - new Date(a[1].createdAt));
+            if (sortedChats.length === 0) {
+                setActiveChat(createNewChat());
+                return;
+            }
+            for (const [id, chat] of sortedChats) {
+                const item = document.createElement('li');
+                item.className = 'history-item';
+                item.dataset.id = id;
+                if (id === activeChatId) { item.classList.add('active'); }
+                item.innerHTML = `
+                    <span class="history-item-title">${chat.title}</span>
+                    <div class="history-item-actions">
+                        <button class="action-button action-menu-toggle" aria-label="Opsi obrolan">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                        </button>
+                        <div class="dropdown-menu" role="menu">
+                            <button class="dropdown-item delete" data-id="${id}" role="menuitem">Hapus</button>
+                        </div>
+                    </div>
+                `;
+                historyList.appendChild(item);
+            }
+        }
+        function deleteChat(id) {
+            if (chats[id]) {
+                const isActiveChat = (id === activeChatId);
+                delete chats[id];
+                saveChatsToStorage();
+                updateAuthUI();
+
+                if (isActiveChat) {
+                    setActiveChat(Object.keys(chats)[0] || createNewChat());
+                }
+                renderHistory();
+                showToast('Obrolan berhasil dihapus.');
+            }
+        }
+        function renderChatMessages() {
+            chatMessages.innerHTML = '';
+            const currentChat = chats[activeChatId];
+            if (currentChat && currentChat.messages) {
+                currentChat.messages.forEach(msg => addChatBubble(msg.role, msg.text, msg.extra));
+            }
+        }
+        function addMessageToCurrentChat(message) {
+            if (chats[activeChatId]) {
+                chats[activeChatId].messages.push(message);
+                if (chats[activeChatId].messages.length === 2 && message.role === 'user') {
+                    chats[activeChatId].title = message.text.substring(0, 30).trim();
+                    if (!chats[activeChatId].title) {
+                        chats[activeChatId].title = "Obrolan Kosong";
+                    }
+                    renderHistory();
+                }
+                saveChatsToStorage();
+            }
+        }
+
+        function setupEventListeners() {
+            themeToggle.addEventListener('click', toggleTheme);
+            menuToggle.addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
+            sidebarOverlay.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+
+            loginBtn.addEventListener('click', showAuthModal);
+            logoutBtn.addEventListener('click', handleLogoutClick);
+            authForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const licenseKey = licenseKeyInput.value;
+
+                if (!licenseKey.trim()) {
+                    showToast('Lisensi tidak boleh kosong!', 'error');
+                    licenseKeyInput.focus();
+                    return;
+                }
+                handleLicenseLogin(licenseKey);
+            });
+
+            engineSelectionButton.addEventListener('click', showEngineSelectionModal);
+            modalEngineFreeBtn.addEventListener('click', () => setEngine('free'));
+            modalEngineProBtn.addEventListener('click', () => setEngine('pro'));
+
+            buyProBtn.addEventListener('click', () => {
+                accountInfoDisplay.style.display = 'block';
+                paymentMethodsDisplay.style.display = 'block';
+                buyProBtn.style.display = 'none';
+            });
+
+            newChatBtn.addEventListener('click', () => {
+                setActiveChat(createNewChat());
+                renderHistory();
+                document.body.classList.remove('sidebar-open');
+            });
+
+            chatForm.addEventListener('submit', handleFormSubmit);
+            userQueryInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleFormSubmit(e);
+                }
+            });
+
+            historyList.addEventListener('click', (e) => {
+                const historyItem = e.target.closest('.history-item');
+                const menuToggleBtn = e.target.closest('.action-menu-toggle');
+                const deleteBtn = e.target.closest('.dropdown-item.delete');
+
+                document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                    if (menu !== (menuToggleBtn ? menuToggleBtn.nextElementSibling : null)) {
+                        menu.classList.remove('show');
+                    }
+                });
+
+                if (menuToggleBtn) {
+                    menuToggleBtn.nextElementSibling.classList.toggle('show');
+                    return;
+                }
+
+                if (deleteBtn) {
+                    deleteChat(deleteBtn.dataset.id);
+                    return;
+                }
+
+                if (historyItem) {
+                    setActiveChat(historyItem.dataset.id);
+                }
+            });
+
+            usernameDisplay.addEventListener('click', (e) => {
+                e.stopPropagation();
+                profileMenu.classList.toggle('show');
+                usernameDisplay.setAttribute('aria-expanded', profileMenu.classList.contains('show'));
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.history-item-actions')) {
+                    document.querySelectorAll('.dropdown-menu').forEach(menu => menu.classList.remove('show'));
+                }
+                if (!e.target.closest('.profile-section')) {
+                    profileMenu.classList.remove('show');
+                    usernameDisplay.setAttribute('aria-expanded', 'false');
+                }
+            });
+
+            userQueryInput.addEventListener('input', adjustTextareaHeight);
+        }
+
+        window.hideAuthModal = function() {
+            authModal.classList.remove('show');
+            setTimeout(() => {
+                authForm.reset();
+                document.body.style.overflow = '';
+            }, 300);
+        };
+        window.hideEngineSelectionModal = function() {
+            engineSelectionModal.classList.remove('show');
+            setTimeout(() => {
+                document.body.style.overflow = '';
+            }, 300);
+        };
+        window.hideProUpgradeModal = function() {
+            proUpgradeModal.classList.remove('show');
+            setTimeout(() => {
+                document.body.style.overflow = '';
+            }, 300);
+        };
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            const query = userQueryInput.value.trim();
+            if (!query) return;
+
+            if (!currentUser) {
+                showToast('Silakan login dengan lisensi Anda terlebih dahulu.', 'error');
+                showAuthModal();
+                return;
+            }
+
+            if (currentEngine === 'pro' && currentUser.accountType !== 'Premium') {
+                showToast('Anda harus memiliki akun Premium untuk menggunakan mode Pro.', 'error');
+                showProUpgradeModal();
+                userQueryInput.value = '';
+                adjustTextareaHeight();
+                return;
+            }
+
+            // ===========================================
+            // Pemeriksaan Kredit Gratis
+            // ===========================================
+            if (currentEngine === 'free') {
+                // Periksa kredit sebelum dikurangi
+                if (currentUser.freeCredits <= 0) {
+                    showToast(`Anda telah menghabiskan ${MAX_FREE_CREDITS} kredit gratis harian Anda. Silakan coba lagi besok atau upgrade ke akun Premium.`, 'error');
+                    userQueryInput.value = '';
+                    adjustTextareaHeight();
+                    generateBtn.disabled = false;
+                    return;
+                }
+                // Kurangi kredit jika mode free dan ada kredit
+                if (!decrementFreeCredit()) {
+                    showToast('Gagal mengurangi kredit. Silakan coba lagi.', 'error');
+                    userQueryInput.value = '';
+                    adjustTextareaHeight();
+                    generateBtn.disabled = false;
+                    return;
+                }
+            }
+            // ===========================================
+            // Akhir Pemeriksaan Kredit Gratis
+            // ===========================================
+
+            const userMessage = { role: 'user', text: query };
+            addChatBubble(userMessage.role, userMessage.text);
+            addMessageToCurrentChat(userMessage);
+
+            userQueryInput.value = '';
+            adjustTextareaHeight();
+            generateBtn.disabled = true;
+
+            addLoadingBubble();
+
+            try {
+                let aiResponse;
+                if (currentEngine === 'free') {
+                    aiResponse = await callFreeEngineAPI(query);
+                    const aiMessage = { role: 'ai', text: '', extra: aiResponse };
+                    document.getElementById('loading-bubble')?.remove();
+                    addChatBubble(aiMessage.role, aiMessage.text, aiMessage.extra);
+                    addMessageToCurrentChat(aiMessage);
+                } else if (currentEngine === 'pro') {
+                    aiResponse = await callProEngineAPI(query);
+                    const aiMessage = { role: 'ai', text: aiResponse };
+                    document.getElementById('loading-bubble')?.remove();
+                    addChatBubble(aiMessage.role, aiMessage.text);
+                    addMessageToCurrentChat(aiMessage);
+                }
+
+            } catch (err) {
+                document.getElementById('loading-bubble')?.remove();
+                console.error("API Error:", err);
+                const errorMessage = `Maaf, terjadi kesalahan: ${err.message || 'Respons tidak valid dari AI.'}`;
+                const errorMsgObject = { role: 'ai', text: errorMessage };
+                addChatBubble(errorMsgObject.role, errorMsgObject.text);
+                addMessageToCurrentChat(errorMsgObject);
+                showToast('Gagal menghubungi AI', 'error');
+            } finally {
+                generateBtn.disabled = false;
+            }
+        }
+
+        async function callFreeEngineAPI(query) {
+            const SYSTEM_INSTRUCTION = `Anda adalah asisten ahli Termux yang dapat memberikan perintah atau membuat kode script. Anda harus merespons dalam format JSON yang valid dan **lengkap**.
+
+            **Penting:** Anda harus memilih salah satu dari dua format JSON di bawah ini, tergantung pada niat pengguna:
+
+            ---
+            **Format 1: Untuk Perintah atau Informasi Umum Termux**
+            Gunakan format ini jika pertanyaan pengguna adalah tentang instalasi paket, konfigurasi sistem, penggunaan perintah dasar Termux, atau pertanyaan umum terkait Termux yang **tidak** secara spesifik meminta 'kode script'.
+
+            Format JSON:
+            {
+              "type": "command",
+              "command": "string_perintah_termux_atau_kosong",
+              "description": "penjelasan_singkat_tapi_lengkap_tentang_perintah_atau_topik",
+              "usage": "tips_penggunaan_dan_informasi_tambahan_yang_berguna"
+            }
+
+            - 'type': Harus "command".
+            - 'command': Berisi perintah Termux yang relevan (misal: "pkg install git"). Kosongkan ("") jika tidak ada perintah spesifik.
+            - 'description': Penjelasan detail tentang perintah atau topik. **Harus selalu terisi**.
+            - 'usage': Tips tambahan atau cara penggunaan. **Harus selalu terisi**.
+
+            Contoh respons (jika pertanyaan "setup python"):
+            {
+              "type": "command",
+              "command": "pkg install python",
+              "description": "Untuk menginstal Python di Termux, gunakan perintah \`pkg install python\`. Pastikan Termux Anda sudah diperbarui dengan \`pkg update && pkg upgrade\` sebelumnya. Setelah instalasi, Anda bisa menjalankan interpreter Python dengan mengetik \`python\` atau \`python3\`.",
+              "usage": "Pastikan koneksi internet stabil. Jika ada masalah, coba \`termux-setup-storage\` dan berikan izin penyimpanan. Perintah Python dijalankan langsung di terminal."
+            }
+
+            ---
+            **Format 2: Untuk Pembuatan Kode Script (Python, PHP, SH, dll.)**
+            Gunakan format ini jika pertanyaan pengguna secara spesifik meminta Anda untuk membuat 'kode script' dalam bahasa pemrograman tertentu (misal: "buatkan script python sederhana", "script php untuk...", "contoh script bash").
+
+            Format JSON:
+            {
+              "type": "script",
+              "setup": "string_perintah_instalasi_dependensi_atau_persiapan_di_termux",
+              "script": "string_isi_lengkap_kode_script_di_sini",
+              "usage": "string_cara_menjalankan_script_atau_informasi_tambahan"
+            }
+
+            - 'type': Harus "script".
+            - 'setup': Perintah Termux yang diperlukan untuk menjalankan script, **termasuk instalasi library atau bahan lain yang dibutuhkan oleh script (misal: 'pip install requests', 'pkg install php-curl')**. Berikan instruksi instalasi lengkap di sini. Kosongkan ("") jika tidak ada setup khusus.
+            - 'script': **Hanya berisi kode script itu sendiri**. Jangan tambahkan penjelasan atau markdown lain di dalam string ini kecuali jika itu adalah bagian dari kode (misal: komentar kode).
+            - 'usage': Instruksi cara menjalankan script di Termux. **Harus selalu terisi**.
+
+            Contoh respons (jika pertanyaan "buat script python untuk kirim http request"):
+            {
+              "type": "script",
+              "setup": "pkg install python && pip install requests",
+              "script": "import requests\\n\\nurl = \"https://api.example.com/data\"\\nresponse = requests.get(url)\\nprint(response.text)",
+              "usage": "1. Pastikan Anda sudah menginstal Python dan library requests. Jika belum, jalankan perintah di bagian 'Persiapan'.\\n2. Simpan kode di atas sebagai file.py (misal: 'nano kirim_request.py').\\n3. Jalankan dengan perintah: 'python kirim_request.py'."
+            }
+
+            ---
+            **Aturan Umum:**
+            - Selalu berikan respons dalam Bahasa Indonesia.
+            - **Jangan pernah meninggalkan properti 'description' atau 'usage' kosong.** Jika 'command' atau 'setup' tidak relevan, biarkan sebagai string kosong ("").
+            - Jika pertanyaan **sama sekali tidak terkait dengan Termux atau pembuatan script, atau jika Anda tidak dapat memahami niat pengguna**, berikan respons fallback ini:
+            {
+              "type": "command",
+              "command": "",
+              "description": "Maaf, saya adalah Asisten AI khusus untuk Termux dan pembuatan script terkait. Mohon ajukan pertanyaan yang terkait dengan perintah Termux, setup, atau permintaan script (Python, PHP, SH, dll.).",
+              "usage": "Anda bisa bertanya tentang instalasi paket, konfigurasi, atau meminta contoh script."
+            }`;
+
+            const response = await fetch(FREE_ENGINE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: `${SYSTEM_INSTRUCTION}\n\nPertanyaan Pengguna: "${query}"` }] }],
+                    generationConfig: {
+                      temperature: 0.6,
+                      topK: 40,
+                      responseMimeType: "application/json"
+                    },
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            let rawText = data.candidates[0]?.content?.parts[0]?.text;
+            let parsedResult = null;
+            let finalOutput = {
+                type: 'command',
+                command: '',
+                description: 'Maaf, terjadi kesalahan internal saat memproses respons AI. Mohon coba lagi atau formulasi ulang pertanyaan Anda.',
+                usage: 'Silakan ajukan pertanyaan yang relevan dengan Termux atau permintaan script.'
+            };
+
+            if (rawText) {
+                if (rawText.startsWith('```json') && rawText.endsWith('```')) {
+                    rawText = rawText.substring(7, rawText.length - 3).trim();
+                }
+                try {
+                    parsedResult = JSON.parse(rawText);
+
+                    if (parsedResult.type === "script") {
+                        finalOutput.type = "script";
+                        finalOutput.setup = parsedResult.setup || '';
+                        finalOutput.script = parsedResult.script || 'Tidak ada kode script yang dihasilkan.';
+                        finalOutput.usage = parsedResult.usage || 'Tidak ada instruksi penggunaan.';
+                    } else {
+                        finalOutput.type = "command";
+                        finalOutput.command = parsedResult.command || '';
+                        finalOutput.description = parsedResult.description || 'Maaf, AI tidak memberikan deskripsi lengkap untuk pertanyaan ini. Silakan coba lagi.';
+                        finalOutput.usage = parsedResult.usage || 'Tidak ada tips penggunaan yang tersedia.';
+                    }
+                } catch (parseError) {
+                    console.error("Failed to parse AI response, raw text:", rawText, parseError);
+                }
+            } else {
+                console.warn("AI returned empty content for Free Engine.");
+            }
+
+            return finalOutput;
+        }
+
+        async function callProEngineAPI(query) {
+            const SYSTEM_INSTRUCTION_PRO = `Anda adalah asisten AI serbaguna yang dapat menjawab berbagai pertanyaan. Berikan jawaban yang informatif, ringkas, dan relevan dalam Bahasa Indonesia. Fokus pada kejelasan dan kemudahan pemahaman. Gunakan Markdown untuk format teks (misal: **bold**, *italic*, \`kode inline\`, \`\`\`block kode\`\`\`, - list).`;
+
+            const response = await fetch(PRO_ENGINE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: `${SYSTEM_INSTRUCTION_PRO}\n\nPertanyaan Pengguna: "${query}"` }] }],
+                    generationConfig: { temperature: 0.7, topK: 40, responseMimeType: "text/plain" }
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.candidates[0]?.content?.parts[0]?.text || 'Tidak ada respons yang tersedia.';
+        }
+
+        function addChatBubble(role, text, extra = null) {
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble ${role} w-fit`;
+            let content = '';
+
+            const userIcon = `<div class="flex-shrink-0 w-8 h-8 rounded-full bg-white/20 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>`;
+            const aiIcon = `<div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="m18 20-4-4"/><path d="m6 8 4 4"/><path d="m6 18 4-4"/><path d="m12 6 4 4"/><path d="m18 10 4 4"/><path d="m6 14 4 4"/><path d="m12 22 4-4"/></svg></div>`;
+
+            if (role === 'user') {
+                content = `<div class="flex items-start gap-3" role="group" aria-label="Pesan pengguna">${userIcon}<div class="text-base mt-1">${text}</div></div>`;
+            } else {
+                if (extra && extra.type === 'script') {
+                    const renderedSetup = marked.parse(extra.setup || '');
+                    const renderedUsage = marked.parse(extra.usage || '');
+
+                    content = `<div class="flex items-start gap-3" role="group" aria-label="Respons script AI">${aiIcon}<div class="flex-grow">
+                        <div class="command-section">
+                            <div class="command-header">
+                                <span class="command-title">💻 Script Code</span>
+                            </div>
+                            ${(extra.setup && extra.setup.trim() !== '') ? `
+                                <div class="response-detail-block">
+                                    <div class="response-detail-block-title">⚙️ Persiapan</div>
+                                    <div class="response-detail-block-text">${renderedSetup}</div>
+                                    <div class="code-block-actions">
+                                        <button class="action-btn copy" onclick="copyText('${btoa(extra.setup)}', this)" aria-label="Salin persiapan">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                            </svg> Salin Persiapan
+                                        </button>
+                                    </div>
+                                </div>` : ''}
+                            <pre class="command-code">${extra.script}</pre>
+                            <div class="code-block-actions" style="text-align: right; margin-top: -1.5rem; margin-bottom: 1rem;">
+                                <button class="action-btn copy" onclick="copyText('${btoa(extra.script)}', this)" aria-label="Salin script">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg> Salin Script
+                                </button>
+                            </div>
+                            ${(extra.usage && extra.usage.trim() !== '') ? `<div class="response-detail-block"><div class="response-detail-block-title">💡 Cara Pakai</div><div class="response-detail-block-text">${renderedUsage}</div></div>` : ''}
+                        </div>
+                    </div></div>`;
+                } else if (extra && extra.type === 'command') {
+                    const renderedDescription = marked.parse(extra.description || '');
+                    const renderedUsage = marked.parse(extra.usage || '');
+
+                    if (extra.command.trim() !== '') {
+                        content = `<div class="flex items-start gap-3" role="group" aria-label="Respons perintah AI">${aiIcon}<div class="flex-grow"><div class="command-section"><div class="command-header"><span class="command-title">🔧 Perintah Termux</span><div class="command-actions"><button class="action-btn copy" onclick="copyText('${btoa(extra.command)}', this)" aria-label="Salin perintah"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Salin</button></div></div><pre class="command-code">${extra.command}</pre><div class="command-description">${renderedDescription}</div>${(extra.usage && extra.usage.trim() !== '') ? `<div class="response-detail-block"><div class="response-detail-block-title">💡 Tips Penggunaan</div><div class="response-detail-block-text">${renderedUsage}</div></div>` : ''}</div></div></div>`;
+                    } else {
+                        content = `<div class="flex items-start gap-3" role="group" aria-label="Respons AI umum">${aiIcon}<div class="flex-grow"><div class="ai-response-pro">${renderedDescription}</div>${(extra.usage && extra.usage.trim() !== '') ? `<div class="response-detail-block"><div class="response-detail-block-title">💡 Tips</div><div class="response-detail-block-text">${renderedUsage}</div></div>` : ''}</div></div>`;
+                    }
+                } else {
+                    content = `<div class="flex items-start gap-3" role="group" aria-label="Respons AI umum">${aiIcon}<div class="flex-grow"><div class="ai-response-pro">${marked.parse(text || 'Tidak ada respons yang tersedia')}</div></div></div>`;
+                }
+            }
+            bubble.innerHTML = content;
+            chatMessages.appendChild(bubble);
+            scrollToBottom();
+        }
+
+        function addLoadingBubble() {
+            const bubble = document.createElement('div');
+            bubble.id = 'loading-bubble';
+            bubble.className = 'chat-bubble ai w-fit';
+            bubble.innerHTML = `<div class="flex items-center gap-3" role="status" aria-label="AI sedang mengetik"><div class="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="m18 20-4-4"/><path d="m6 8 4 4"/><path d="m6 18 4-4"/><path d="m12 6 4 4"/><path d="m18 10 4 4"/><path d="m6 14 4 4"/><path d="m12 22 4-4"/></svg></div><div class="loading-dots"><span></span><span></span><span></span></div></div>`;
+            chatMessages.appendChild(bubble);
+            scrollToBottom();
+        }
+        function adjustTextareaHeight() {
+            userQueryInput.style.height = 'auto';
+            const computedStyle = window.getComputedStyle(userQueryInput);
+            const minHeight = parseFloat(computedStyle.minHeight);
+            const maxHeight = parseFloat(computedStyle.maxHeight);
+
+            let newHeight = userQueryInput.scrollHeight;
+            newHeight = Math.max(newHeight, minHeight);
+            newHeight = Math.min(newHeight, maxHeight);
+
+            userQueryInput.style.height = newHeight + 'px';
+
+            if (userQueryInput.scrollHeight > maxHeight) {
+                userQueryInput.style.overflowY = 'auto';
+            } else {
+                userQueryInput.style.overflowY = 'hidden';
+            }
+        }
+        function scrollToBottom() {
+            requestAnimationFrame(() => {
+                chatMessages.scrollTo({ top: chatMessages.scrollHeight, behavior: 'smooth' });
+            });
+        }
+        function showToast(msg, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type === 'error' ? 'border-red-500' : 'border-primary'}`;
+            toast.innerHTML = `<p class="font-medium">${msg}</p>`;
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.addEventListener('transitionend', () => toast.remove());
+            }, 3000);
+        }
+
+        window.copyText = function (encoded, btn) {
+            const text = atob(encoded);
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Perintah berhasil disalin!');
+                const originalContent = btn.innerHTML;
+                btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Disalin!`;
+                setTimeout(() => { btn.innerHTML = originalContent; }, 1500);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                showToast('Gagal menyalin perintah.', 'error');
+            });
+        };
+
+        init();
+    });
+  </script>
+</body>
+</html>
